@@ -44,7 +44,7 @@ default_config = {
     },
 
     "Greetings": {
-        "cacheInitChats": "0",
+        "cacheInitChats": "1",
         "ignoreSystemMessages": "0",
         "sendGreetings": "0",
         "greetingsText": "Привет, $username!"
@@ -78,7 +78,7 @@ default_config = {
     },
 
     "Other": {
-        "watermark": "",
+        "watermark": "🤖 𝑭𝒖𝒏𝑷𝒂𝒚 𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍",
         "requestsDelay": "4",
         "language": "ru"
     }

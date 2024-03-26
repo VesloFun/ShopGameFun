@@ -185,7 +185,7 @@ class Message:
         self.by_bot: bool = False
         """Отправлено ли сообщение с помощью :meth:`FunPayAPI.Account.send_message`?"""
         self.badge: str | None = badge_text
-        """Текст бэйджика тех. поддержки."""
+        """Текст бэйджика тех. поддержки или автовыдачи FunPay."""
 
     def get_message_type(self) -> MessageTypes:
         """
@@ -250,6 +250,9 @@ class OrderShortcut:
     :param price: цена заказа.
     :type price: :obj:`float`
 
+    :param price: валюта заказа.
+    :type price: :obj:`str`
+
     :param buyer_username: никнейм покупателя.
     :type buyer_username: :obj:`str`
 
@@ -271,7 +274,7 @@ class OrderShortcut:
     :param dont_search_amount: не искать кол-во товара.
     :type dont_search_amount: :obj:`bool`, опционально
     """
-    def __init__(self, id_: str, description: str, price: float,
+    def __init__(self, id_: str, description: str, price: float, currency: str,
                  buyer_username: str, buyer_id: int, status: OrderStatuses,
                  date: datetime.datetime, subcategory_name: str, html: str, dont_search_amount: bool = False):
         self.id: str = id_ if not id_.startswith("#") else id_[1:]
@@ -280,6 +283,8 @@ class OrderShortcut:
         """Описание заказа."""
         self.price: float = price
         """Цена заказа."""
+        self.currency: str = currency
+        """Валюта заказа."""
         self.amount: int | None = self.parse_amount() if not dont_search_amount else None
         """Кол-во товаров."""
         self.buyer_username: str = buyer_username
@@ -305,7 +310,7 @@ class OrderShortcut:
         res = RegularExpressions()
         result = res.PRODUCTS_AMOUNT.findall(self.description)
         if result:
-            return int(result[0].split(" ")[0])
+            return int(result[0].replace(" ", ""))
         return 1
 
     def __str__(self):
@@ -351,12 +356,15 @@ class Order:
 
     :param review: объект отзыва на заказ.
     :type review: :class:`FunPayAPI.types.Review` or :obj:`None`
+
+    :param order_secrets: cписок товаров автовыдачи FunPay.
+    :type order_secrets: :obj:`list` of :obj:`str`
     """
     def __init__(self, id_: str, status: OrderStatuses, subcategory: SubCategory, short_description: str | None,
-                 full_description: str | None, sum_: float,
+                 full_description: str | None, sum_: float, currency: str,
                  buyer_id: int, buyer_username: str,
                  seller_id: int, seller_username: str,
-                 html: str, review: Review | None):
+                 html: str, review: Review | None, order_secrets: list[str]):
         self.id: str = id_ if not id_.startswith("#") else id_[1:]
         """ID заказа."""
         self.status: OrderStatuses = status
@@ -371,6 +379,8 @@ class Order:
         """Полное описание заказа."""
         self.sum: float = sum_
         """Сумма заказа."""
+        self.currency: str = currency
+        """Валюта заказа."""
         self.buyer_id: int = buyer_id
         """ID покупателя."""
         self.buyer_username: str = buyer_username
@@ -383,7 +393,8 @@ class Order:
         """HTML код заказа."""
         self.review: Review | None = review
         """Объект отзыва заказа."""
-
+        self.order_secrets: list[str] = order_secrets
+        """Список товаров автовыдачи FunPay заказа."""
 
 class Category:
     """
@@ -596,7 +607,7 @@ class LotShortcut:
     :type html: :obj:`str`
     """
     def __init__(self, id_: int | str, server: str | None,
-                 description: str | None, price: float, subcategory: SubCategory, html: str):
+                 description: str | None, price: float, currency: str, subcategory: SubCategory, seller: str, stars: float | int | None, html: str):
         self.id: int | str = id_
         if isinstance(self.id, str) and self.id.isnumeric():
             self.id = int(self.id)
@@ -609,6 +620,12 @@ class LotShortcut:
         """Краткое описание (название) лота."""
         self.price: float = price
         """Цена лота."""
+        self.currency: str = currency
+        """Валюта лота."""
+        self.seller: str = seller
+        """Никнейм продавца."""
+        self.stars: float | int | None = stars
+        """Количество звезд продавца."""
         self.subcategory: SubCategory = subcategory
         """Подкатегория лота."""
         self.html: str = html

@@ -5,6 +5,9 @@
 /FunPayAPI/__pycache__
 /logs
 /storage
+/configs
+/plugins
 /build
 /dist
 test.py
+backup.zip

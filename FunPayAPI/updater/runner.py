@@ -78,6 +78,15 @@ class Runner:
 
         self.__msg_time_re = re.compile(r"\d{2}:\d{2}")
 
+        try:
+            self.last_messages_ids = {2: account.get_chat_history(chat_id="flood")[-1].id}
+            logger.info(f"ID сообщения из общего чата успешно получено: {self.last_messages_ids}")
+        except:
+            logger.warning(f"ID сообщения из общего чата не получено: {self.last_messages_ids}")
+            logger.debug("TRACEBACK", exc_info=True)
+        """Сохраняем сообщение из общего чата, чтобы несколько одновременно полученных сообщений от человека,
+         которого не было в сохранненных чатах, отображались корректно после перезапуска"""
+
     def get_updates(self) -> dict:
         """
         Запрашивает список событий FunPay.
@@ -132,7 +141,8 @@ class Runner:
             :class:`FunPayAPI.updater.events.OrderStatusChangedEvent`
         """
         events = []
-        for obj in updates["objects"]:
+        #сортируем в т.ч. для того, чтобы приветственное сообщение было перед данными автАовыдачи
+        for obj in sorted(updates["objects"], key=lambda x: x.get("type") == "chat_bookmarks", reverse=True):
             if obj.get("type") == "chat_bookmarks":
                 events.extend(self.parse_chat_updates(obj))
             elif obj.get("type") == "orders_counters":
@@ -269,7 +279,7 @@ class Runner:
             # Если нет сохраненного ID последнего сообщения
             if not self.last_messages_ids.get(cid):
                 # Если данный чат был доступен при первом запросе и есть сохраненное последнее сообщение,
-                # то ищем новые сообщения относительно последнего сохраненного текста
+                # то ищем новые сообщения относительно последнего сохраненного текста или минимального сохраненного id
                 if init_msg_text := self.init_messages.get(cid):
                     del self.init_messages[cid]
                     temp = []
@@ -279,14 +289,17 @@ class Runner:
                                 if not temp:
                                     temp.append(i)
                                 break
-                        elif i.text[:250] == init_msg_text:
+                        elif i.text[:250] == init_msg_text or i.id<(min(self.last_messages_ids.values(), default=0)):
                             break
                         temp.append(i)
                     messages = list(reversed(temp))
 
-                # Если данного чата не было при первом запросе, в результат добавляем только ласт сообщение истории.
+                # Если данного чата не было при первом запросе, в результат добавляем
+                # только сообщения, у которых ID больше чем у минимального из сохраненных.
+                # Если сохраненных ID нету совсем, то добавляем только ласт сообщение истории.
                 else:
-                    messages = messages[-1:]
+                    messages_temp = [m for m in messages if m.id > min(self.last_messages_ids.values(), default=10**20)]
+                    messages = messages_temp if messages_temp else messages[-1:]
 
             self.last_messages_ids[cid] = messages[-1].id  # Перезаписываем ID последнего сообщение
             self.by_bot_ids[cid] = [i for i in self.by_bot_ids[cid] if i > self.last_messages_ids[cid]]  # чистим память
@@ -324,7 +337,7 @@ class Runner:
         while attempts:
             attempts -= 1
             try:
-                orders_list = self.account.get_sells()
+                orders_list = self.account.get_sells()#todo добавить возможность реакции на подтверждение очень старых заказов
                 break
             except exceptions.RequestFailedError as e:
                 logger.error(e)
