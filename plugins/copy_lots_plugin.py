@@ -1,5 +1,10 @@
 from __future__ import annotations
+
+from os.path import exists
 from typing import TYPE_CHECKING
+
+import telebot
+
 if TYPE_CHECKING:
     from cardinal import Cardinal
 
@@ -13,9 +18,9 @@ import json
 
 
 NAME = "Lots Copy Plugin"
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 DESCRIPTION = "Данный плагин позволяет быстро переносить лоты с одного аккаунта на другой."
-CREDITS = "@woopertail"
+CREDITS = "@woopertail\nфиксы, взаимодействие с автовыдачей фп - @sidor0912"
 UUID = "5693f220-bcc6-4f6e-9745-9dee8664cbb2"
 SETTINGS_PAGE = False
 
@@ -39,6 +44,9 @@ Callback для активации режима ожидания файла с �
 User-state: ожидается файл с лотами, полученного с помощью команды /cache_lots.
 """
 
+settings = {
+    "with_secrets": False
+}
 
 def download_file(tg, msg: Message, file_name: str = "temp_file.txt"):
     """
@@ -130,7 +138,13 @@ def init_commands(cardinal: Cardinal):
             attempts = 3
             while attempts:
                 try:
-                    result.append(cardinal.account.get_lot_fields(i.id))
+                    lot_fields = cardinal.account.get_lot_fields(i.id)
+                    fields = lot_fields.fields
+                    if "secrets" in fields.keys():
+                        if not settings.get("with_secrets"):
+                            fields["secrets"] = ""
+                            del fields["auto_delivery"]
+                    result.append(lot_fields)
                     logger.info(f"[LOTS COPY] Получил данные о лоте {i.id}.")
                     break
                 except:
@@ -186,7 +200,9 @@ def init_commands(cardinal: Cardinal):
                              "❌ Процесс копирования лотов уже начался! "
                              "Дождитесь конца текущего процесса или перезапустите бота.")
             return
-        result = bot.send_message(m.chat.id, "Отправьте токен (golden_key) аккаунта, на который нужно скопировать лоты.",
+        result = bot.send_message(m.chat.id, "Отправьте токен (golden_key) аккаунта, на который нужно скопировать лоты.\n"
+                                             "Копировать встроенную автовыдачу FunPay: "
+                                             f"{'🟢Вкл.' if settings.get('with_secrets') else '🔴Выкл.'} (изменить - /copy_with_secrets)",
                                   reply_markup=skb.CLEAR_STATE_BTN())
         tg.set_state(m.chat.id, result.id, m.from_user.id, CBT_COPY_LOTS)
 
@@ -244,7 +260,8 @@ def init_commands(cardinal: Cardinal):
             return
         RUNNING = True
         try:
-            bot.send_message(m.chat.id, "Получаю данные о текущем профиле...")
+            bot.send_message(m.chat.id, f"Получаю данные о текущем профиле...\nКопировать встроенную автовыдачу FunPay: "
+                                        f"{'🟢Вкл.' if settings.get('with_secrets') else '🔴Выкл.'} (изменить - /copy_with_secrets)")
             profile = get_current_account(m)
 
             bot.send_message(m.chat.id, "Получаю данные о текущих лотах (это может занять кое-какое время (1 лот/сек))...")
@@ -319,18 +336,43 @@ def init_commands(cardinal: Cardinal):
             logger.debug("TRACEBACK", exc_info=True)
             bot.send_message(m.chat.id, "❌ Не удалось создать лоты.")
             return
+    def copy_with_secrets (m: telebot.types.Message):
+        try:
+            if RUNNING:
+                bot.send_message(m.chat.id,
+                                 "❌ Процесс копирования лотов уже начался! "
+                                 "Дождитесь конца текущего процесса или перезапустите бота.")
+                return
+            global settings
+            settings["with_secrets"] = not(settings.get("with_secrets"))
+            with open("storage/plugins/copy_lots_settings.json", "w", encoding="utf-8") as f:
+                f.write(json.dumps(settings, indent=4, ensure_ascii=False))
+            bot.send_message(m.chat.id, f"Изменено успешно.\nКопировать встроенную автовыдачу FunPay: "
+                                        f"{'🟢Вкл.' if settings.get('with_secrets') else '🔴Выкл.'}")
+        except:
+            logger.debug("TRACEBACK", exc_info=True)
+            bot.send_message(m.chat.id, "Произошла ошибка.")
+
 
     cardinal.add_telegram_commands(UUID, [
         ("copy_lots", "копирует активные лоты с текущего аккаунта на другой.", True),
         ("cache_lots", "кэширует активные лоты в файл", True),
-        ("create_lots", "создает лоты на текущем аккаунте", True)
+        ("create_lots", "создает лоты на текущем аккаунте", True),
+        ("copy_with_secrets", "Копировать ли встроенную автовыдачу FunPay?", True)
     ])
 
     tg.msg_handler(act_copy_lots, commands=["copy_lots"])
     tg.msg_handler(copy_lots, func=lambda m: tg.check_state(m.chat.id, m.from_user.id, CBT_COPY_LOTS))
     tg.msg_handler(cache_lots, commands=["cache_lots"])
     tg.msg_handler(act_create_lots, commands=["create_lots"])
+    tg.msg_handler(copy_with_secrets, commands=["copy_with_secrets"])
     tg.file_handler(CBT_CREATE_LOTS, create_lots)
+    if exists("storage/plugins/copy_lots_settings.json"):
+        with open("storage/plugins/copy_lots_settings.json", "r", encoding="utf-8") as f:
+            global settings
+            settings2 = json.loads(f.read())
+            settings.update(settings2)
+            logger.info(f"[LOTS COPY] Настройки копирования лотов загружены.")
 
 
 BIND_TO_PRE_INIT = [init_commands]
