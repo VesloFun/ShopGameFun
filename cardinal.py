@@ -307,18 +307,10 @@ class Cardinal(object):
                 continue
 
             # В любом другом случае пытаемся поднять лоты всех категорий, относящихся к игре
-            raise_ok = False
-            error_text = ""
             try:
                 time.sleep(0.5)
                 self.account.raise_lots(subcat.category.id)
-                logger.info(_("crd_lots_raised", subcat.category.name))
-                raise_ok = True
-                time.sleep(0.5)
-                self.account.raise_lots(subcat.category.id)
             except FunPayAPI.exceptions.RaiseError as e:
-                if e.error_message is not None:
-                    error_text = e.error_message
                 if e.wait_time is not None:
                     logger.warning(_("crd_raise_time_err", subcat.category.name, cardinal_tools.time_to_str(e.wait_time)))
                     next_time = int(time.time()) + e.wait_time
@@ -327,8 +319,7 @@ class Cardinal(object):
                     next_time = int(time.time()) + 10
                 self.raise_time[subcat.category.id] = next_time
                 next_call = next_time if next_time < next_call else next_call
-                if not raise_ok:
-                    continue
+                continue
             except Exception as e:
                 if isinstance(e, FunPayAPI.exceptions.RequestFailedError) and e.status_code == 429:
                     logger.warning(_("crd_raise_429_err", subcat.category.name))
@@ -339,9 +330,14 @@ class Cardinal(object):
                     logger.debug("TRACEBACK", exc_info=True)
                     next_time = int(time.time()) + 10
                 next_call = next_time if next_time < next_call else next_call
-                if not raise_ok:
-                    continue
-            self.run_handlers(self.post_lots_raise_handlers, (self, subcat.category, error_text))
+                continue
+
+            logger.info(_("crd_lots_raised", subcat.category.name))
+            logger.info(_("crd_raise_wait_3600", cardinal_tools.time_to_str(3600)))
+            next_time = int(time.time()) + 3600
+            self.raise_time[subcat.category.id] = next_time
+            next_call = next_time if next_time < next_call else next_call
+            self.run_handlers(self.post_lots_raise_handlers, (self, subcat.category))
         return next_call if next_call < float("inf") else 10
 
     @staticmethod
@@ -367,7 +363,7 @@ class Cardinal(object):
         Разбивает сообщения по 20 строк, отделяет изображения от текста.
         (обозначение изображения: $photo=1234567890)
 
-        :param msg_text: текст сообщения.
+        :param text: текст сообщения.
 
         :return: набор текстов сообщений / изображений.
         """
@@ -392,7 +388,7 @@ class Cardinal(object):
                 entities.extend(self.split_text(text))
         return entities
 
-    def send_message(self, chat_id: int, message_text: str, chat_name: str | None = None,  attempts: int = 3,
+    def send_message(self, chat_id: int, message_text: str, chat_name: str | None,  attempts: int = 3,
                      watermark: bool = True) -> list[FunPayAPI.types.Message] | None:
         """
         Отправляет сообщение в чат FunPay.
@@ -428,7 +424,7 @@ class Cardinal(object):
                     elif isinstance(entity, float):
                         time.sleep(entity)
                     break
-                except Exception as ex:
+                except:
                     logger.warning(_("crd_msg_send_err", chat_id))
                     logger.debug("TRACEBACK", exc_info=True)
                     logger.info(_("crd_msg_attempts_left", current_attempts))
@@ -544,12 +540,6 @@ class Cardinal(object):
 
         if self.MAIN_CFG["Telegram"].getboolean("enabled"):
             self.telegram.setup_commands()
-            try:
-                self.telegram.edit_descriptions()
-            except:
-                logger.debug("Не удалось изменить описание Telegram-бота")
-                logger.debug("TRACEBACK", exc_info=True)
-
             Thread(target=self.telegram.run, daemon=True).start()
 
         self.__init_account()

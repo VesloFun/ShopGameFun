@@ -47,30 +47,8 @@ def save_last_tag():
         f.write(LAST_TAG)
 
 
-def get_announcement() -> dict | None:
-    """
-    Получает информацию об объявлении.
-    Если тэг объявления совпадает с сохраненным тегом, возвращает None.
-    Если произошла ошибка при получении объявлении, возвращает None.
 
-    :return: словарь с данными объявления.
-    """
-    global LAST_TAG
-    headers = {
-        'X-GitHub-Api-Version': '2022-11-28',
-        'accept': 'application/vnd.github+json'
-    }
-    try:
-        response = requests.get("https://api.github.com/gists/e26d264e6912cc9c78bc00cb14773ffe", headers=headers)
-        if not response.status_code == 200:
-            return None
-
-        content = json.loads(response.json().get("files").get("fpc.json").get("content"))
-        if content.get("tag") == LAST_TAG:
-            return None
-        return content
-    except:
-        return None
+    
 
 
 def download_photo(url: str) -> bytes | None:
@@ -171,46 +149,3 @@ def get_keyboard(data: dict) -> K | None:
     return kb
 
 
-def announcements_loop(crd: Cardinal):
-    """
-    Бесконечный цикл получения объявлений.
-    """
-    global LAST_TAG
-    if not crd.telegram:
-        return
-
-    while True:
-        try:
-            if not (data := get_announcement()):
-                time.sleep(REQUESTS_DELAY)
-                continue
-
-            elif not LAST_TAG:
-                LAST_TAG = data.get("tag")
-                save_last_tag()
-                time.sleep(REQUESTS_DELAY)
-                continue
-
-            LAST_TAG = data.get("tag")
-            save_last_tag()
-            text = get_text(data)
-            photo = get_photo(data)
-            notification_type = get_notification_type(data)
-            keyboard = get_keyboard(data)
-            pin = get_pin(data)
-
-            if text or photo:
-                Thread(target=crd.telegram.send_notification,
-                       args=(text,),
-                       kwargs={"photo": photo, 'notification_type': notification_type, 'keyboard': keyboard, 'pin': pin},
-                       daemon=True).start()
-        except:
-            pass
-        time.sleep(REQUESTS_DELAY)
-
-
-def main(crd: Cardinal):
-    Thread(target=announcements_loop, args=(crd,), daemon=True).start()
-
-
-BIND_TO_POST_INIT = [main]

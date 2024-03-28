@@ -55,7 +55,7 @@ def parse_wait_time(response: str) -> int:
         return (int(response[1])-1) * 60
     elif "час" in response:
         response = response.split()
-        return (int(response[1])) * 3600 - 60*30
+        return (int(response[1])) * 3600
     else:
         return 10
 
@@ -78,7 +78,8 @@ class RegularExpressions(object):
         Лучше всего использовать вместе с MessageTypesRes.ORDER_PURCHASED2
         """
 
-        self.ORDER_PURCHASED2 = re.compile(r"[a-zA-Z0-9]+, не забудьте потом нажать кнопку («Подтвердить выполнение заказа»|«Подтвердить получение валюты»)\.")
+        self.ORDER_PURCHASED2 = re.compile(r"[a-zA-Z0-9]+, не забудьте потом нажать кнопку "
+                                           r"«Подтвердить выполнение заказа»\.")
         """
         Скомпилированное регулярное выражение, описывающее сообщение об оплате заказа (2).
         Лучше всего использовать вместе с MessageTypesRes.ORDER_PURCHASED
@@ -165,7 +166,7 @@ class RegularExpressions(object):
         Точный текст сообщения о предложении перехода в Discord.
         """
 
-        self.PRODUCTS_AMOUNT = re.compile(r",\s(\d{1,3}(?:\s?\d{3})*)\sшт\.")
+        self.PRODUCTS_AMOUNT = re.compile(r"\d+ шт\.")
         """
         Скомпилированное регулярное выражение, описывающее запись кол-ва товаров в заказе.
         """

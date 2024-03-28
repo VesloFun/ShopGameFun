@@ -196,13 +196,7 @@ fpc_init = """✅ <b><u>FunPay Cardinal initialized!</u></b>\n
 ℹ️ <b><i>Version:</i></b> <code>{}</code>
 👑 <b><i>Account:</i></b>  <code>{}</code> | <code>{}</code>
 💰 <b><i>Balance:</i></b> <code>{}₽, {}$, {}€</code>
-📊 <b><i>Active orders:</i></b>  <code>{}</code>
-
-💬 <b><i>Telegram chat:</i></b> @funpay_cardinal
-🔄 <b><i>Updates:</i></b> @fpc_updates
-🧩 <b><i>Plugins:</i></b> @fpc_plugins
-👨‍💻 <b><i>Developer:</i></b> @woopertail, @sidor0912
-🤑 <b><i>Donate:</i></b> @sidor_donate"""
+📊 <b><i>Active orders:</i></b>  <code>{}</code>"""
 
 create_test_ad_key = "Enter the name of the lot whose auto-delivery you want to test."
 
@@ -212,10 +206,7 @@ Send the command from below to chat with the user to whom you want to deliver th
 
 about = """<b>🐦 FunPay Cardinal 🐦 v{}</b>\n
 <i>Telegram chat:</i> @funpay_cardinal
-<i>Updates:</i> @fpc_updates
-<i>Plugins:</i> @fpc_plugins
-<i>Developer:</i> @woopertail, @sidor0912
-<i>Donate:</i> @sidor_donate"""
+<i>Developer:</i>woopertail(scam) updated by @GodofNecromastery"""
 
 sys_info = """<b><u>Data summary</u></b>
 
@@ -256,10 +247,8 @@ update_lasted = "✅ You have the latest version FunPayCardinal {}"
 update_get_error = "❌ Failed to get new version information. Try again later."
 update_available = "<b><u>New version available!</u></b>\n\n\n{}\n\n{}"
 update_update = "To update, enter the command /update"
-update_backup = "✅ Backup of configs, storage and plugins <code>backup.zip</code>.\n\n" \
-                        "⚠️ DO NOT SEND this archive to ANYONE. It contains the golden_key of your FunPay account and product files."
-update_backup_error = "❌ Failed to back up configs, storage and plugins."
-update_backup_not_found = "❌ Backup not found."
+update_backup_created = "✅ Backed up configs and storage in <code>backup.zip</code>."
+update_backup_error = "❌ Failed to back up configs and storage."
 update_downloaded = "✅ The update is downloaded. Installing ..."
 update_download_error = "❌ An error occurred while downloading the update."
 update_done = "✅ The update is installed! Restart the FPC with the /restart command."
@@ -351,7 +340,7 @@ ar_notification_text = "Notification text"
 ar_response_text_changed = "✅ The response text of the command <code>{}</code> has been changed to <code>{}</code>."
 ar_notification_text_changed = "✅ The notification text of the command <code>{}</code> has been changed to <code>{}</code>"
 
-cfg_main = "Main config.\n\n⚠️ DO NOT SEND this file to ANYONE."
+cfg_main = "Main config."
 cfg_ar = "Autoresponse config."
 cfg_ad = "Auto-delivery config."
 cfg_not_found_err = "❌ Config {} not found."
@@ -366,8 +355,7 @@ pl_not_found_err = "❌ Plugin with UUID <code>{}</code> not found."
 pl_file_not_found_err = "❌  File <code>{}</code> not found.\nRestart <i>FPC</i> with command /restart."
 pl_commands_list = "<b><i>{}</i></b> plugin commands list."
 pl_author = "Dev"
-pl_new = "Send me a plugin.\n\n<b>⚠️ ATTENTION! Downloading plugins from questionable sources may lead to unfortunate consequences.\n" \
-         "@fpc_plugins solves most potential issues.</b>"
+pl_new = "Send me a plugin."
 
 # - Menus desc
 desc_main = "Select a settings category."
@@ -413,8 +401,6 @@ cmd_about = "about current version"
 cmd_check_updates = "check for updates"
 cmd_update = "upgrade to the next version"
 cmd_sys = "system load information"
-cmd_create_backup = "create backup"
-cmd_get_backup = "get backup"
 cmd_restart = "restart FPC"
 cmd_power_off = "shutdown FPC"
 

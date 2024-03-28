@@ -44,7 +44,7 @@ def get_tags() -> list[str] | None:
     :return: список тегов.
     """
     try:
-        response = requests.get("https://api.github.com/repos/sidor0912/FunPayCardinal/tags", headers=HEADERS)
+        response = requests.get("https://api.github.com/repos/noxy128/FPC-Clear/tags", headers=HEADERS)
         if not response.status_code == 200:
             logger.debug(f"Update status code is {response.status_code}!")
             return None
@@ -86,7 +86,7 @@ def get_release(tag: str) -> Release | None:
     :return: данные релиза.
     """
     try:
-        response = requests.get(f"https://api.github.com/repos/sidor0912/FunPayCardinal/releases/tags/{tag}",
+        response = requests.get(f"https://api.github.com/repos/noxy128/FPC-Clear/releases/tags/{tag}",
                                 headers=HEADERS)
         if not response.status_code == 200:
             logger.debug(f"Update status code is {response.status_code}!")
@@ -95,7 +95,8 @@ def get_release(tag: str) -> Release | None:
         name = json_response.get("name")
         description = json_response.get("body")
         sources = json_response.get("zipball_url")
-        exe = f"https://github.com/sidor0912/FunPayCardinal/archive/refs/tags/{tag}.zip"
+        assets = json_response.get("assets")
+        exe = assets[0].get("browser_download_url")
         return Release(name, description, sources, exe)
     except:
         logger.debug("TRACEBACK", exc_info=True)
@@ -176,8 +177,6 @@ def zipdir(path, zip_obj):
     :param zip_obj: объект zip архива.
     """
     for root, dirs, files in os.walk(path):
-        if os.path.basename(root) == "__pycache__":
-            continue
         for file in files:
             zip_obj.write(os.path.join(root, file),
                           os.path.relpath(os.path.join(root, file),
@@ -194,7 +193,6 @@ def create_backup() -> int:
         with zipfile.ZipFile("backup.zip", "w") as zip:
             zipdir("storage", zip)
             zipdir("configs", zip)
-            zipdir("plugins", zip)
         return 0
     except:
         logger.debug("TRACEBACK", exc_info=True)

@@ -212,19 +212,11 @@ class Account:
                 price = float(offer.find("div", {"class": "tc-price"})["data-s"])
             else:
                 price = float(offer.find("div", {"class": "tc-price"}).find("div").text.split()[0])
-            currency = offer.find("div", {"class": "tc-price"}).find("span", class_= "unit").text
-            seller_soup = offer.find("div", class_="tc-user")
-            seller = seller_soup.find("div", class_="media-user-name").text.strip()
-            rating_stars_soup = seller_soup.find("div", class_="rating-stars")
-            if (rating_stars_soup != None):
-                rating_stars = len(rating_stars_soup.find_all("i", class_="fas"))
-            else:
-                rating_stars = None
-            lot_obj = types.LotShortcut(offer_id, server, description, price, currency, subcategory_obj, seller, rating_stars, str(offer))
+            lot_obj = types.LotShortcut(offer_id, server, description, price, subcategory_obj, str(offer))
             result.append(lot_obj)
         return result
 
-    def get_balance(self, lot_id: int = 20978354) -> types.Balance:
+    def get_balance(self, lot_id: int = 18853876) -> types.Balance:
         """
         Получает информацию о балансе пользователя.
 
@@ -455,7 +447,7 @@ class Account:
             raise exceptions.MessageNotDeliveredError(response, error_text, chat_id)
 
         mes = json_response["objects"][0]["data"]["messages"][-1]
-        parser = BeautifulSoup(mes["html"].replace("<br>", "\n"), "html.parser")
+        parser = BeautifulSoup(mes["html"], "html.parser")
         try:
             if image_link := parser.find("a", {"class": "chat-img-link"}):
                 image_link = image_link.get("href")
@@ -746,15 +738,13 @@ class Account:
         response = self.method("post", "lots/raise", headers, payload, raise_not_200=True)
         json_response = response.json()
         logger.debug(f"Ответ FunPay (поднятие категорий): {json_response}.")
-        if not json_response.get("error") and not json_response.get("url"):
+        if not json_response.get("error"):
             return True
-        elif json_response.get("url"):
-            raise exceptions.RaiseError(response, category, json_response.get("url"), 7200)
         elif json_response.get("error") and json_response.get("msg") and "Подождите" in json_response.get("msg"):
             wait_time = utils.parse_wait_time(json_response.get("msg"))
-            raise exceptions.RaiseError(response, category, json_response.get("msg"), wait_time)
+            raise exceptions.RaiseError(response, category, json_response.get("MSG"), wait_time)
         else:
-            raise exceptions.RaiseError(response, category, json_response.get("msg"), None)
+            raise exceptions.RaiseError(response, category, None, None)
 
     def get_user(self, user_id: int) -> types.UserProfile:
         """
@@ -813,20 +803,17 @@ class Account:
                     price = float(j.find("div", {"class": "tc-price"})["data-s"])
                 else:
                     price = float(j.find("div", {"class": "tc-price"}).find("div").text.split(" ")[0])
-                currency = j.find("div", {"class": "tc-price"}).find("span", class_ = "unit").text
-                lot_obj = types.LotShortcut(offer_id, server, description, price, currency, subcategory_obj, username, None, str(j))
+
+                lot_obj = types.LotShortcut(offer_id, server, description, price, subcategory_obj, str(j))
                 user_obj.add_lot(lot_obj)
         return user_obj
 
-    def get_chat(self, chat_id: int, with_history: bool = True) -> types.Chat:
+    def get_chat(self, chat_id: int) -> types.Chat:
         """
         Получает информацию о личном чате.
 
         :param chat_id: ID чата.
         :type chat_id: :obj:`int`
-
-        :param with_history: получать ли историю сообщений?.
-        :type with_history: :obj:`bool`
 
         :return: объект чата.
         :rtype: :class:`FunPayAPI.types.Chat`
@@ -845,10 +832,8 @@ class Account:
         else:
             a = chat_panel.find("a")
             text, link = a.text, a["href"]
-        if with_history:
-            history = self.get_chat_history(chat_id, interlocutor_username=name)
-        else:
-            history = []
+
+        history = self.get_chat_history(chat_id, interlocutor_username=name)
         return types.Chat(chat_id, name, link, text, html_response, history)
 
     def get_order(self, order_id: str) -> types.Order:
@@ -883,9 +868,7 @@ class Account:
         short_description = None
         full_description = None
         sum_ = None
-        currency = "?"
         subcategory = None
-        order_secrets = []
         for div in parser.find_all("div", {"class": "param-item"}):
             if not (h := div.find("h5")):
                 continue
@@ -894,18 +877,14 @@ class Account:
             elif h.text == "Подробное описание":
                 full_description = div.find("div").text
             elif h.text == "Сумма":
-                sum_ = float(div.find("span").text.replace(" ", ""))
-                currency = div.find("strong").text
-            elif h.text in ("Категория", "Валюта"):
+                sum_ = float(div.find("span").text)
+            elif h.text == "Категория":
                 subcategory_link = div.find("a").get("href")
                 subcategory_split = subcategory_link.split("/")
                 subcategory_id = int(subcategory_split[-2])
                 subcategory_type = types.SubCategoryTypes.COMMON if "lots" in subcategory_link else \
                     types.SubCategoryTypes.CURRENCY
                 subcategory = self.get_subcategory(subcategory_type, subcategory_id)
-            elif h.text in ("Оплаченный товар", "Оплаченные товары"):
-                secret_placeholders = div.find_all("span", class_="secret-placeholder")
-                order_secrets = [i.text for i in secret_placeholders]
 
         chat = parser.find("div", {"class": "chat-header"})
         chat_link = chat.find("div", {"class": "media-user-name"}).find("a")
@@ -937,8 +916,8 @@ class Account:
         else:
             review = types.Review(stars, text, reply, False, str(reply_obj), order_id, buyer_username, buyer_id)
 
-        order = types.Order(order_id, status, subcategory, short_description, full_description, sum_, currency,
-                            buyer_id, buyer_username, seller_id, seller_username, html_response, review, order_secrets)
+        order = types.Order(order_id, status, subcategory, short_description, full_description, sum_,
+                            buyer_id, buyer_username, seller_id, seller_username, html_response, review)
         return order
 
     def get_sells(self, start_from: str | None = None, include_paid: bool = True, include_closed: bool = True,
@@ -1047,10 +1026,7 @@ class Account:
                 continue
 
             description = div.find("div", {"class": "order-desc"}).find("div").text
-            tc_price = div.find("div", {"class": "tc-price"}).text
-            tc_price = tc_price.replace(" ", "")
-            price = float(tc_price[:-1])
-            currency = tc_price[-1]
+            price = float(div.find("div", {"class": "tc-price"}).text.split(" ")[0])
 
             buyer_div = div.find("div", {"class": "media-user-name"}).find("span")
             buyer_username = buyer_div.text
@@ -1079,7 +1055,7 @@ class Account:
                 h, m = split[1].split(":")
                 order_date = datetime(year, month, day, int(h), int(m))
 
-            order_obj = types.OrderShortcut(order_id, description, price, currency, buyer_username, buyer_id, order_status,
+            order_obj = types.OrderShortcut(order_id, description, price, buyer_username, buyer_id, order_status,
                                             order_date, subcategory_name, str(div))
             sells.append(order_obj)
 
@@ -1219,20 +1195,21 @@ class Account:
         """
         if not self.is_initiated:
             raise exceptions.AccountNotInitiatedError()
-        headers = {}
+        headers = {
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-requested-with": "XMLHttpRequest",
+        }
         response = self.method("get", f"lots/offerEdit?offer={lot_id}", headers, {}, raise_not_200=True)
 
-        html_response = response.content.decode()
-        bs = BeautifulSoup(html_response, "html.parser")
+        json_response = response.json()
+        bs = BeautifulSoup(json_response["html"], "html.parser")
 
         result = {"active": "", "deactivate_after_sale": ""}
         result.update({field["name"]: field.get("value") or "" for field in bs.find_all("input")
                        if field["name"] not in ["active", "deactivate_after_sale"]})
         result.update({field["name"]: field.text or "" for field in bs.find_all("textarea")})
-        result.update({
-            field["name"]: field.find("option", selected=True)["value"]
-            for field in bs.find_all("select") if "hidden" not in field.find_parent(class_="form-group").get("class", [])
-        })
+        result.update({field["name"]: field.find("option", selected=True)["value"] for field in bs.find_all("select")})
         result.update({field["name"]: "on" for field in bs.find_all("input", {"type": "checkbox"}, checked=True)})
         return types.LotFields(lot_id, result)
 
@@ -1394,12 +1371,12 @@ class Account:
             if i["id"] < from_id:
                 continue
             author_id = i["author"]
-            parser = BeautifulSoup(i["html"].replace("<br>", "\n"), "html.parser")
+            parser = BeautifulSoup(i["html"], "html.parser")
 
             # Если ник или бейдж написавшего неизвестен, но есть блок с данными об авторе сообщения
             if None in [ids.get(author_id), badges.get(author_id)] and (author_div := parser.find("div", {"class": "media-user-name"})):
                 if badges.get(author_id) is None:
-                    badge = author_div.find("span", {"class": "chat-msg-author-label label label-success"})
+                    badge = author_div.find("span")
                     badges[author_id] = badge.text if badge else 0
                 if ids.get(author_id) is None:
                     author = author_div.find("a").text.strip()
@@ -1433,10 +1410,6 @@ class Account:
             i.author = ids.get(i.author_id)
             i.chat_name = interlocutor_username
             i.badge = badges.get(i.author_id) if badges.get(i.author_id) != 0 else None
-            parser = BeautifulSoup(i.html, "html.parser")
-            default_label = parser.find("div", {"class": "media-user-name"})
-            default_label = default_label.find("span", {"class": "chat-msg-author-label label label-default"}) if default_label else None
-            i.badge = default_label.text if (i.badge is None and default_label is not None) else i.badge
         return messages
 
     @staticmethod

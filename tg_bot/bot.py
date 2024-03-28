@@ -17,8 +17,7 @@ import psutil
 import telebot
 import logging
 
-from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand, \
-    InputFile
+from telebot.types import InlineKeyboardMarkup as K, InlineKeyboardButton as B, Message, CallbackQuery, BotCommand
 from tg_bot import utils, static_keyboards as skb, keyboards as kb, CBT
 from Utils import cardinal_tools, updater
 from locales.localizer import Localizer
@@ -78,8 +77,6 @@ class TGBot:
             "check_updates": _("cmd_check_updates"),
             "update": _("cmd_update"),
             "sys": _("cmd_sys"),
-            "get_backup": _("cmd_get_backup"),
-            "create_backup": _("cmd_create_backup"),
             "restart": _("cmd_restart"),
             "power_off": _("cmd_power_off")
         }
@@ -308,8 +305,6 @@ class TGBot:
         """
         Отправляет статистику аккаунта.
         """
-        self.cardinal.account.get()
-        self.cardinal.balance = self.cardinal.get_balance()
         self.bot.send_message(m.chat.id, utils.generate_profile_text(self.cardinal),
                               reply_markup=skb.REFRESH_BTN())
 
@@ -435,19 +430,6 @@ class TGBot:
             try:
                 with open("logs/log.log", "r", encoding="utf-8") as f:
                     self.bot.send_document(m.chat.id, f)
-                    f.seek(0)
-                    file_content = f.read()
-                    if "TRACEBACK" in file_content:
-                        file_content, right = file_content.rsplit("TRACEBACK", 1)
-                        file_content = "\n[".join(file_content.rsplit("\n[", 2)[-2:])
-                        right = right.split("\n[", 1)[0]
-                        result = f"<b>Текст последней ошибки:</b>\n\n[{utils.escape(file_content)}TRACEBACK{utils.escape(right)}"
-                        while result:
-                            text, result = result[:4096], result[4096:]
-                            self.bot.send_message(m.chat.id, text)
-                            time.sleep(0.5)
-                    else:
-                        self.bot.send_message(m.chat.id, "Ошибок за последние сутки не обнаружено.")
             except:
                 self.bot.send_message(m.chat.id, _("logfile_error"))
                 logger.debug("TRACEBACK", exc_info=True)
@@ -464,7 +446,7 @@ class TGBot:
                     deleted += 1
                 except:
                     continue
-        self.bot.send_message(m.chat.id, _("logfile_deleted").format(deleted))
+        self.bot.send_message(m.chat.id, _("logfile_deleted"))
 
     def about(self, m: Message):
         """
@@ -486,22 +468,6 @@ class TGBot:
         self.bot.send_message(m.chat.id, _("update_available", release.name, release.description))
         self.bot.send_message(m.chat.id, _("update_update"))
 
-    def get_backup (self, m: Message):
-        if os.path.exists("backup.zip"):
-            with open(file_path := "backup.zip", 'rb') as file:
-                modification_time = os.path.getmtime(file_path)
-                formatted_time = time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(modification_time))
-                self.bot.send_document(chat_id=m.chat.id, document=InputFile(file), caption=f'{_("update_backup")}\n\n{formatted_time}')
-        else:
-            self.bot.send_message(m.chat.id, _("update_backup_not_found"))
-
-    def create_backup (self, m: Message):
-        if updater.create_backup():
-            self.bot.send_message(m.chat.id, _("update_backup_error"))
-            return False
-        self.get_backup(m)
-        return True
-
     def update(self, m: Message):
         curr_tag = f"v{self.cardinal.VERSION}"
         release = updater.get_new_release(curr_tag)
@@ -514,8 +480,11 @@ class TGBot:
             self.bot.send_message(m.chat.id, _(errors[release][0], *errors[release][1]))
             return
 
-        if not self.create_backup(m):
+        if updater.create_backup():
+            self.bot.send_message(m.chat.id, _("update_backup_error"))
             return
+        self.bot.send_message(m.chat.id, _("update_backup_created"))
+
         if updater.download_zip(release.exe_link if getattr(sys, "frozen", False) else release.sources_link) \
                 or (release_folder := updater.extract_update_archive()) == 1:
             self.bot.send_message(m.chat.id, _("update_download_error"))
@@ -613,7 +582,7 @@ class TGBot:
         node_id, username = data["node_id"], data["username"]
         self.clear_state(message.chat.id, message.from_user.id, True)
         response_text = message.text.strip()
-        result = self.cardinal.send_message(node_id, response_text, username, watermark=False)
+        result = self.cardinal.send_message(node_id, response_text, username)
         if result:
             self.bot.reply_to(message, _("msg_sent", node_id, username),
                               reply_markup=kb.reply(node_id, username, again=True, extend=True))
@@ -712,30 +681,20 @@ class TGBot:
 
         messages = chat.messages[-10:]
         last_message_author_id = -1
-        last_by_bot = False
-        last_badge = None
         for i in messages:
-            if i.author_id == last_message_author_id and i.by_bot == last_by_bot and i.badge == last_badge:
+            if i.author_id == last_message_author_id:
                 author = ""
             elif i.author_id == self.cardinal.account.id:
-                author = f"<i><b>🤖 {_('you')} (<i>FPC</i>):</b></i> " if i.by_bot else f"<i><b>🫵 {_('you')}:</b></i> "
-                if i.badge:
-                    author = f"<i><b>📦 {_('you')} ({i.badge}):</b></i> "
+                author = f"<i><b>🫵 {_('you')}:</b></i> "
             elif i.author_id == 0:
                 author = f"<i><b>🔵 {i.author}: </b></i>"
-            elif i.badge and i.badge != "автоответ":
-                author = f"<i><b>🆘 {i.author} ({i.badge}): </b></i>"
             elif i.author == i.chat_name:
                 author = f"<i><b>👤 {i.author}: </b></i>"
-                if i.badge:
-                    author = f"<i><b>🛍️ {i.author} ({i.badge}):</b></i> "
             else:
                 author = f"<i><b>🆘 {i.author} ({_('support')}): </b></i>"
             msg_text = f"<code>{i.text}</code>" if i.text else f"<a href=\"{i.image_link}\">{_('photo')}</a>"
             text += f"{author}{msg_text}\n\n"
             last_message_author_id = i.author_id
-            last_by_bot = i.by_bot
-            last_badge = i.badge
 
         self.bot.edit_message_text(text, c.message.chat.id, c.message.id,
                                    reply_markup=kb.reply(int(chat_id), username, False, False))
@@ -932,7 +891,7 @@ class TGBot:
         self.cardinal.save_config(self.cardinal.MAIN_CFG, "configs/_main.cfg")
         if localizer.current_language == "eng":
             self.bot.answer_callback_query(c.id, "The translation may be incomplete and contain errors.\n\n"
-                                                 "If you find errors in the translation, let @sidor0912 know.\n\n"
+                                                 "If you find errors in the translation, let @woopertail know.\n\n"
                                                  "Thank you :)", show_alert=True)
         self.open_cp(c)
 
@@ -975,8 +934,6 @@ class TGBot:
         self.msg_handler(self.about, commands=["about"])
         self.msg_handler(self.check_updates, commands=["check_updates"])
         self.msg_handler(self.update, commands=["update"])
-        self.msg_handler(self.get_backup, commands=["get_backup"])
-        self.msg_handler(self.create_backup, commands=["create_backup"])
         self.msg_handler(self.send_system_info, commands=["sys"])
         self.msg_handler(self.restart_cardinal, commands=["restart"])
         self.msg_handler(self.ask_power_off, commands=["power_off"])
@@ -1056,31 +1013,6 @@ class TGBot:
         """
         commands = [BotCommand(f"/{i}", self.commands[i]) for i in self.commands]
         self.bot.set_my_commands(commands)
-
-    def edit_descriptions(self):
-        """
-        Изменяет описания бота.
-        """
-        self.bot.set_my_short_description("🛠️ github.com/sidor0912/FunPayCardinal 💰 @sidor_donate 👨‍💻 @sidor0912 🧩 @fpc_plugins 🔄 @fpc_updates 💬 @funpay_cardinal ")
-        self.bot.set_my_description(f"""🐦 𝑭𝒖𝒏𝑷𝒂𝒚 𝑪𝒂𝒓𝒅𝒊𝒏𝒂𝒍 v{self.cardinal.VERSION}🐦
-
-🤖 Автовыдача товаров
-🚀 Автоподнятие лотов
-💬 Автоответ на заготовленные команды
-🔄 Автовосстановление лотов после продажи
-📦 Автодеактивация лотов, если товары закончились
-🔝 Вечный онлайн
-📲 Уведомления в Telegram
-🕹️ Полноценная панель управления в Telegram
-🧩 Плагины
-🌟 И многое другое...
-
-🛠️ Сделано с помощью: github.com/sidor0912/FunPayCardinal
-👨‍💻 Автор: @woopertail, @sidor0912
-💰 Донат: @sidor_donate
-🔄 Обновления: @fpc_updates
-🧩 Плагины: @fpc_plugins
-💬 Чат: @funpay_cardinal""")
 
     def init(self):
         self.__register_handlers()

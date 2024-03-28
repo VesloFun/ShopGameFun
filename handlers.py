@@ -147,7 +147,7 @@ def add_old_user_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChange
     else:
         chat_id = e.chat.id
 
-    if not c.MAIN_CFG["Greetings"].getboolean("cacheInitChats") or chat_id in c.old_users:
+    if chat_id in c.old_users:
         return
     c.old_users.append(chat_id)
     cardinal_tools.cache_old_users(c.old_users)
@@ -229,7 +229,6 @@ def send_new_msg_notification_handler(c: Cardinal, e: NewMessageEvent) -> None:
     text = ""
     last_message_author_id = -1
     last_by_bot = False
-    last_badge = None
     for i in events:
         message_text = str(e.message)
         if message_text.strip().lower() in c.AR_CFG.sections() and len(events) < 2:
@@ -237,27 +236,23 @@ def send_new_msg_notification_handler(c: Cardinal, e: NewMessageEvent) -> None:
         elif message_text.startswith("!автовыдача") and len(events) < 2:
             continue
 
-        if i.message.author_id == last_message_author_id and i.message.by_bot == last_by_bot and i.message.badge == last_badge:
+        if i.message.author_id == last_message_author_id and i.message.by_bot == last_by_bot:
             author = ""
         elif i.message.author_id == c.account.id:
             author = f"<i><b>🤖 {_('you')} (<i>FPC</i>):</b></i> " if i.message.by_bot else f"<i><b>🫵 {_('you')}:</b></i> "
-            if i.message.badge:
-                author = f"<i><b>📦 {_('you')} ({i.message.badge}):</b></i> "
         elif i.message.author_id == 0:
             author = f"<i><b>🔵 {i.message.author}: </b></i>"
-        elif i.message.badge and i.message.badge != "автоответ":
-            author = f"<i><b>🆘 {i.message.author} ({i.message.badge}): </b></i>"
+        elif i.message.badge:
+            author = f"<i><b>🆘 {i.message.author} ({_('support')}): </b></i>"
         elif i.message.author == i.message.chat_name:
             author = f"<i><b>👤 {i.message.author}: </b></i>"
-            if i.message.badge:
-                author = f"<i><b>🛍️ {i.message.author} ({i.message.badge}):</b></i> "
         else:
             author = f"<i><b>🆘 {i.message.author} {_('support')}: </b></i>"
         msg_text = f"<code>{i.message}</code>" if i.message.text else f"<a href=\"{i.message}\">{_('photo')}</a>"
         text += f"{author}{msg_text}\n\n"
         last_message_author_id = i.message.author_id
         last_by_bot = i.message.by_bot
-        last_badge = i.message.badge
+
     kb = keyboards.reply(chat_id, chat_name, extend=True)
     Thread(target=c.telegram.send_notification, args=(text, kb, utils.NotificationTypes.new_message),
            daemon=True).start()
@@ -279,10 +274,10 @@ def process_review_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChan
     if not c.old_mode_enabled:
         if isinstance(e, LastChatMessageChangedEvent):
             return
-        message_type, its_me = e.message.type, f" {c.account.username} " in str(e.message)
+        message_type, its_me = e.message.type, c.account.username in str(e.message)
         message_text, chat_id = str(e.message), e.message.chat_id
     else:
-        message_type, its_me = e.chat.last_message_type, f" {c.account.username} " in str(e.chat)
+        message_type, its_me = e.chat.last_message_type, c.account.username in str(e.chat)
         message_text, chat_id = str(e.chat), e.chat.id
 
     if message_type not in [types.MessageTypes.NEW_FEEDBACK, types.MessageTypes.FEEDBACK_CHANGED] or its_me:
@@ -311,24 +306,7 @@ def process_review_handler(c: Cardinal, e: NewMessageEvent | LastChatMessageChan
         reply_text = None
         if c.MAIN_CFG["ReviewReply"].getboolean(toggle) and c.MAIN_CFG["ReviewReply"].get(text):
             try:
-                #Укорачиваем текст до 1000 символов, до 10 строк
-                def format_text4review(text_: str):
-                    text_ = text_[:1001]
-                    if len(text_) > 1000:
-                        ln = len(text_)
-                        indexes = []
-                        for char in (".", "!", "\n"):
-                            index1 = text_.rfind(char)
-                            indexes.extend([index1, text_[:index1].rfind(char)])
-                        text_ = text_[:max(indexes, key = lambda x: (x<ln-1, x))]+"📜"
-                    while text_.count("\n") > 9 and "\n\n" in text_:
-                        text_ = text_[::-1].replace("\n\n", "\n", text_.count("\n") - 9)[::-1]
-                    if text_.count("\n") > 9:
-                        text_ = text_[::-1].replace("\n", " ", text_.count("\n") - 9)[::-1]
-                    return text_
-
                 reply_text = cardinal_tools.format_order_text(c.MAIN_CFG["ReviewReply"].get(text), order)
-                reply_text = format_text4review(reply_text)
                 c.account.send_review(order_id, reply_text)
             except:
                 logger.error(f"Произошла ошибка при ответе на отзыв {order_id}.")
@@ -397,21 +375,21 @@ def test_auto_delivery_handler(c: Cardinal, e: NewMessageEvent | LastChatMessage
     date_text = date.strftime("%H:%M")
     html = ORDER_HTML_TEMPLATE.replace("$username", chat_name).replace("$lot_name", lot_name).replace("$date", date_text)
 
-    fake_order = OrderShortcut("ADTEST", lot_name, 0.0, "?", chat_name, 000000, types.OrderStatuses.PAID,
+    fake_order = OrderShortcut("ADTEST", lot_name, 0.0, chat_name, 000000, types.OrderStatuses.PAID,
                                date, "Авто-выдача, Тест", html)
 
     fake_event = NewOrderEvent(e.runner_tag, fake_order)
     c.run_handlers(c.new_order_handlers, (c, fake_event,))
 
 
-def send_categories_raised_notification_handler(c: Cardinal, cat: types.Category, error_text: str = "") -> None:
+def send_categories_raised_notification_handler(c: Cardinal, cat: types.Category) -> None:
     """
     Отправляет уведомление о поднятии лотов в Telegram.
     """
     if not c.telegram:
         return
 
-    text = f"""⤴️<b><i>Поднял все лоты категории</i></b> <code>{cat.name}</code>\n<tg-spoiler>{error_text}</tg-spoiler>"""
+    text = f"""⤴️<b><i>Поднял все лоты категории</i></b> <code>{cat.name}</code>"""
     Thread(target=c.telegram.send_notification,
            args=(text, ),
            kwargs={"notification_type": utils.NotificationTypes.lots_raise}, daemon=True).start()
@@ -506,8 +484,8 @@ def send_new_order_notification_handler(c: Cardinal, e: NewOrderEvent, *args):
             delivery_info = _("ntfc_new_order_user_blocked")
         else:
             delivery_info = _("ntfc_new_order_will_be_delivered")
-    text = _("ntfc_new_order", utils.escape(e.order.description), e.order.buyer_username,
-             f"{e.order.price} {e.order.currency}", e.order.id, delivery_info)
+    text = _("ntfc_new_order", utils.escape(e.order.description), e.order.buyer_username, e.order.price, e.order.id,
+             delivery_info)
 
     chat_id = c.account.get_chat_by_name(e.order.buyer_username, True).id
     keyboard = keyboards.new_order(e.order.id, e.order.buyer_username, chat_id)
@@ -556,7 +534,7 @@ def deliver_product_handler(c: Cardinal, e: NewOrderEvent, *args) -> None:
     """
     if not c.MAIN_CFG["FunPay"].getboolean("autoDelivery"):
         return
-    if e.order.buyer_username in c.blacklist and c.bl_delivery_enabled:
+    if e.order.buyer_username in c.blacklist and c.MAIN_CFG["BlockList"].getboolean("blockDelivery"):
         logger.info(f"Пользователь {e.order.buyer_username} находится в ЧС и включена блокировка автовыдачи. "
                     f"$YELLOW(ID: {e.order.id})$RESET")
         return
@@ -786,5 +764,3 @@ BIND_TO_ORDER_STATUS_CHANGED = [send_thank_u_message_handler, send_order_confirm
 BIND_TO_POST_DELIVERY = [send_delivery_notification_handler]
 
 BIND_TO_POST_START = [send_bot_started_notification_handler]
-
-
